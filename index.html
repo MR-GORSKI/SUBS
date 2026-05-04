@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Track every recurring charge. Visual gantt timeline of your subscriptions.">
   <!-- Cache-bust: bump ?v= on every deploy. Browsers see new URL → fresh fetch. -->
-  <link rel="stylesheet" href="styles.css?v=7">
-  <link rel="stylesheet" href="mobile.css?v=7">
-  <link rel="stylesheet" href="auth.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="mobile.css?v=8">
+  <link rel="stylesheet" href="auth.css?v=8">
 </head>
 <body>
   <div id="root"></div>
@@ -19,22 +19,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Plain JS modules (executed in order before Babel scripts) -->
-  <script src="supabase.js?v=7"></script>
-  <script src="fx.js?v=7"></script>
-  <script src="prefs.js?v=7"></script>
-  <script src="i18n.js?v=7"></script>
-  <script src="gcal.js?v=7"></script>
+  <script src="supabase.js?v=8"></script>
+  <script src="fx.js?v=8"></script>
+  <script src="prefs.js?v=8"></script>
+  <script src="i18n.js?v=8"></script>
+  <script src="gcal.js?v=8"></script>
 
   <!-- Shared Babel modules -->
-  <script type="text/babel" src="tweaks-panel.jsx?v=7"></script>
-  <script type="text/babel" src="utils.jsx?v=7"></script>
-  <script type="text/babel" src="modals.jsx?v=7"></script>
-  <script type="text/babel" src="gantt.jsx?v=7"></script>
-  <script type="text/babel" src="auth.jsx?v=7"></script>
+  <script type="text/babel" src="tweaks-panel.jsx?v=8"></script>
+  <script type="text/babel" src="utils.jsx?v=8"></script>
+  <script type="text/babel" src="modals.jsx?v=8"></script>
+  <script type="text/babel" src="gantt.jsx?v=8"></script>
+  <script type="text/babel" src="auth.jsx?v=8"></script>
 
   <!-- Both shells; picker chooses one based on viewport -->
-  <script type="text/babel" src="app.jsx?v=7"></script>
-  <script type="text/babel" src="mobile.jsx?v=7"></script>
+  <script type="text/babel" src="app.jsx?v=8"></script>
+  <script type="text/babel" src="mobile.jsx?v=8"></script>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useCallback } = React;
@@ -227,9 +227,11 @@
         try {
           const created = await subsRepo.create(data);
           setSubs(p => [created, ...(p || [])]);
-          syncCreate(created); // fire-and-forget
+          // Calendar event is created by the bulk-sync effect below — don't
+          // double-call syncCreate here, that races with bulk-sync and creates
+          // duplicate events.
         } catch (e) { console.error(e); alert('Add failed: ' + e.message); }
-      }, [syncCreate]);
+      }, []);
 
       const updateSub = useCallback(async (id, patch) => {
         const before = (subs || []).find(s => s.id === id);
@@ -253,9 +255,16 @@
         catch (e) { console.error(e); alert('Delete failed: ' + e.message); setSubs(before); }
       }, [subs, syncDelete]);
 
-      // ── One-time bulk sync when user toggles Calendar ON ──
-      // Creates events for any existing subs that don't have one yet.
-      // Skips closed subs (no point creating reminders for already-cancelled ones).
+      // ── Sole creator: bulk sync handles every "new" sub ──
+      // Triggered by any subs change (add, realtime ping, etc.). Iterates over
+      // pending subs (no event yet, not closed), creates the event, then
+      // updates BOTH local state (synchronous, prevents re-detection as pending
+      // on the next effect run) AND Supabase (async, persists for next session).
+      // Re-checks subsRef inside the loop in case another effect already handled
+      // the sub between the snapshot and the create call.
+      const subsRef = React.useRef(subs);
+      useEffect(() => { subsRef.current = subs; }, [subs]);
+
       const bulkSyncRunningRef = React.useRef(false);
       useEffect(() => {
         if (!prefs.googleCalendarEnabled || !subs || subs.length === 0) return;
@@ -270,8 +279,17 @@
             const calendarId = await resolveCalendarId();
             for (const s of pending) {
               if (isCalendarBlocked()) break;
+              // Re-check from latest state — sub may have been deleted, closed,
+              // or already synced by a parallel race.
+              const current = (subsRef.current || []).find(x => x.id === s.id);
+              if (!current || current.closed || current.gcal_event_id) continue;
               try {
-                const eventId = await gcal.createEvent(calendarId, s, prefs.warnDays);
+                const eventId = await gcal.createEvent(calendarId, current, prefs.warnDays);
+                // Synchronous local update — kills the race against the realtime
+                // ping that follows our subsRepo.update below.
+                setSubs(p => (p || []).map(x =>
+                  x.id === s.id ? { ...x, gcal_event_id: eventId, gcal_calendar_id: calendarId } : x
+                ));
                 await subsRepo.update(s.id, { gcal_event_id: eventId, gcal_calendar_id: calendarId });
               } catch (e) { handleCalendarError(e); break; }
             }
@@ -279,13 +297,6 @@
           finally { bulkSyncRunningRef.current = false; }
         })();
       }, [prefs.googleCalendarEnabled, prefs.warnDays, subs, resolveCalendarId, handleCalendarError]);
-
-      // ── Re-sync existing events when warnDays changes ──
-      // First-render initializes the ref without firing API calls (we assume
-      // events already match the loaded warnDays). Subsequent changes pump
-      // updateEvent through every existing event.
-      const subsRef = React.useRef(subs);
-      useEffect(() => { subsRef.current = subs; }, [subs]);
       const lastWarnDaysRef = React.useRef(null);
       useEffect(() => {
         if (!prefs.googleCalendarEnabled || isCalendarBlocked()) return;
