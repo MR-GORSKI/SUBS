@@ -13,12 +13,23 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // ── Auth ─────────────────────────────────────────────────
+// Scopes requested at sign-in. `calendar.events` lets us create events on
+// the user's own calendars (not list other users' calendars).
+// `access_type=offline` + `prompt=consent` ensures Google issues a refresh
+// token so Supabase can transparently refresh provider_token after 1h.
+const GOOGLE_SCOPES = 'email profile openid https://www.googleapis.com/auth/calendar.events';
+
 async function signInWithGoogle() {
   // After Google flow, Supabase redirects back to current page; the JS client
   // catches the hash and creates a session, then onAuthStateChange fires.
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
     options: {
+      scopes: GOOGLE_SCOPES,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
       redirectTo: window.location.origin + window.location.pathname,
     },
   });
@@ -54,6 +65,8 @@ function rowToSub(r) {
     start: r.start,
     color: r.color,
     closed: r.closed,
+    gcal_event_id: r.gcal_event_id || null,
+    gcal_calendar_id: r.gcal_calendar_id || null,
   };
 }
 
@@ -91,13 +104,15 @@ const subsRepo = {
 
   async update(id, patch) {
     const row = {};
-    if ('name' in patch)     row.name = patch.name;
-    if ('price' in patch)    row.price = patch.price;
-    if ('currency' in patch) row.currency = patch.currency;
-    if ('period' in patch)   row.period = patch.period;
-    if ('start' in patch)    row.start = patch.start;
-    if ('color' in patch)    row.color = patch.color;
-    if ('closed' in patch)   row.closed = patch.closed;
+    if ('name' in patch)             row.name = patch.name;
+    if ('price' in patch)            row.price = patch.price;
+    if ('currency' in patch)         row.currency = patch.currency;
+    if ('period' in patch)           row.period = patch.period;
+    if ('start' in patch)            row.start = patch.start;
+    if ('color' in patch)            row.color = patch.color;
+    if ('closed' in patch)           row.closed = patch.closed;
+    if ('gcal_event_id' in patch)    row.gcal_event_id = patch.gcal_event_id;
+    if ('gcal_calendar_id' in patch) row.gcal_calendar_id = patch.gcal_calendar_id;
     const { data, error } = await sb
       .from('subscriptions')
       .update(row)
@@ -114,6 +129,19 @@ const subsRepo = {
   },
 };
 
+// Returns the Google OAuth access token from the current session,
+// optionally forcing a refresh first (useful after a 401 from a Google API).
+async function getGoogleAccessToken({ forceRefresh = false } = {}) {
+  if (forceRefresh) {
+    const { error } = await sb.auth.refreshSession();
+    if (error) throw new Error('Session refresh failed: ' + error.message);
+  }
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error('Not signed in');
+  if (!session.provider_token) throw new Error('NO_GOOGLE_TOKEN');
+  return session.provider_token;
+}
+
 // Expose
 Object.assign(window, {
   sb,
@@ -121,4 +149,5 @@ Object.assign(window, {
   signOut,
   userProfile,
   subsRepo,
+  getGoogleAccessToken,
 });

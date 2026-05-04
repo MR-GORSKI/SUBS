@@ -3,7 +3,13 @@
 
 (function () {
   const KEY = 'subs:prefs:v1';
-  const DEFAULTS = { displayCurrency: 'EUR', language: 'EN' };
+  const DEFAULTS = {
+    displayCurrency: 'EUR',
+    language: 'EN',
+    googleCalendarEnabled: false,
+    googleCalendarId: null,
+    warnDays: 3,
+  };
 
   function load() {
     try {

@@ -152,11 +152,10 @@ function MobileAuth({ mode = 'signin', onSignIn, onSignUp, onBack } = {}) {
 
 // ── Mobile profile sheet ──────────────────────────────────
 function MobileProfile({ user, prefs, setPref, onClose, onSignOut, standalone = false } = {}) {
-  const [notifications, setNotifications] = useState(true);
-  const [warnDays, setWarnDays] = useState(3);
-
   const currency = prefs?.displayCurrency || 'EUR';
   const lang = prefs?.language || 'EN';
+  const calendarOn = !!prefs?.googleCalendarEnabled;
+  const warnDays = prefs?.warnDays ?? 3;
   const t = (k) => i18n.t(k, lang);
 
   const name = user?.name || 'Guest';
@@ -203,10 +202,10 @@ function MobileProfile({ user, prefs, setPref, onClose, onSignOut, standalone = 
           <div className="m-profile__group-label">{t('NOTIFICATIONS')}</div>
           <div className="m-profile__row">
             <div>
-              <div className="m-profile__row-label">{t('Charge reminders')}</div>
+              <div className="m-profile__row-label">Google Calendar</div>
               <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{t('Push when a sub is about to renew')}</div>
             </div>
-            <div className={`m-toggle ${notifications?'m-toggle--on':''}`} onClick={() => setNotifications(!notifications)}>
+            <div className={`m-toggle ${calendarOn?'m-toggle--on':''}`} onClick={() => setPref?.('googleCalendarEnabled', !calendarOn)}>
               <div className="m-toggle__dot" />
             </div>
           </div>
@@ -216,9 +215,9 @@ function MobileProfile({ user, prefs, setPref, onClose, onSignOut, standalone = 
               <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{t('Days before charge')}</div>
             </div>
             <div className="m-step">
-              <div className="m-step__btn" onClick={() => setWarnDays(Math.max(1, warnDays-1))}>−</div>
+              <div className="m-step__btn" onClick={() => setPref?.('warnDays', Math.max(0, warnDays-1))}>−</div>
               <div className="m-step__val">{warnDays}D</div>
-              <div className="m-step__btn" onClick={() => setWarnDays(Math.min(14, warnDays+1))}>+</div>
+              <div className="m-step__btn" onClick={() => setPref?.('warnDays', Math.min(14, warnDays+1))}>+</div>
             </div>
           </div>
         </div>
@@ -262,11 +261,10 @@ function MobileProfile({ user, prefs, setPref, onClose, onSignOut, standalone = 
 
 // ── Desktop profile panel ─────────────────────────────────
 function DesktopProfile({ user, stats, prefs, setPref, onClose, onSignOut } = {}) {
-  const [notifications, setNotifications] = useState(true);
-  const [warnDays, setWarnDays] = useState(3);
-
   const currency = prefs?.displayCurrency || 'EUR';
   const lang = prefs?.language || 'EN';
+  const calendarOn = !!prefs?.googleCalendarEnabled;
+  const warnDays = prefs?.warnDays ?? 3;
   const t = (k) => i18n.t(k, lang);
 
   const name = user?.name || 'Guest';
@@ -331,10 +329,10 @@ function DesktopProfile({ user, stats, prefs, setPref, onClose, onSignOut } = {}
             <div className="profile-panel__section-head">{t('NOTIFICATIONS')}</div>
             <div className="profile-panel__row">
               <div>
-                <div className="profile-panel__row-label">{t('Charge reminders')}</div>
-                <div className="profile-panel__row-help">{t('Get notified before a subscription renews')}</div>
+                <div className="profile-panel__row-label">Sync with Google Calendar</div>
+                <div className="profile-panel__row-help">Each subscription becomes a recurring event in a dedicated "SUBS — Subscriptions" calendar. Google Calendar handles the reminders.</div>
               </div>
-              <div className={`m-toggle ${notifications?'m-toggle--on':''}`} onClick={() => setNotifications(!notifications)}>
+              <div className={`m-toggle ${calendarOn?'m-toggle--on':''}`} onClick={() => setPref?.('googleCalendarEnabled', !calendarOn)}>
                 <div className="m-toggle__dot" />
               </div>
             </div>
@@ -344,9 +342,9 @@ function DesktopProfile({ user, stats, prefs, setPref, onClose, onSignOut } = {}
                 <div className="profile-panel__row-help">{t('Days in advance for renewal alerts')}</div>
               </div>
               <div className="m-step">
-                <div className="m-step__btn" onClick={() => setWarnDays(Math.max(1, warnDays-1))}>−</div>
+                <div className="m-step__btn" onClick={() => setPref?.('warnDays', Math.max(0, warnDays-1))}>−</div>
                 <div className="m-step__val">{warnDays}D</div>
-                <div className="m-step__btn" onClick={() => setWarnDays(Math.min(14, warnDays+1))}>+</div>
+                <div className="m-step__btn" onClick={() => setPref?.('warnDays', Math.min(14, warnDays+1))}>+</div>
               </div>
             </div>
           </div>
