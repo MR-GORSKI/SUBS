@@ -10,10 +10,20 @@ Pure static SPA. No build step.
 
 - React 18 + ReactDOM via UMD CDN.
 - Babel-standalone compiles JSX in the browser.
-- All state in `localStorage` (until Supabase is wired).
+- Supabase: Postgres + Auth (Google OAuth only). RLS enforces per-user isolation.
 - Single entry: `index.html`. Picks Desktop or Mobile shell via `matchMedia(<=768px)`.
 
-See [SPEC.md](SPEC.md) for full architecture, contracts, and invariants.
+See [SPEC.md](SPEC.md) for architecture, contracts, and invariants.
+
+## Backend setup (one-time)
+
+1. Create a Supabase project.
+2. SQL Editor → run [`schema.sql`](schema.sql).
+3. Authentication → Providers → enable Google. Set Client ID/Secret from Google Cloud Console.
+4. In Google Cloud → OAuth consent + Credentials:
+   - Authorized JavaScript origins: your deployed URL.
+   - Authorized redirect URIs: the Supabase callback URL.
+5. Project URL + anon key go into `supabase.js` (top of file).
 
 ## Local development
 
@@ -33,8 +43,10 @@ python -m http.server 8000
 
 ## Roadmap
 
-- [ ] Supabase backend (Postgres + Auth).
-- [ ] Google OAuth (single sign-in option).
+- [x] Supabase backend (Postgres + Auth).
+- [x] Google OAuth.
+- [x] Realtime cross-device sync.
 - [ ] Multi-currency.
 - [ ] Categories and service logos.
 - [ ] Spending chart (per month aggregate).
+- [ ] Push notifications for upcoming charges.

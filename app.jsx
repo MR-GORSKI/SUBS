@@ -1,36 +1,11 @@
-// app.jsx — main shell with KPIs + state management
+// app.jsx — desktop App. Pure renderer: receives subs + handlers from data layer.
 
 const { useState: useS, useMemo: useM, useEffect: useE } = React;
 
-const STORAGE_KEY = 'subs:data:v1';
-
-function loadSubs() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-// Auth screens are presented inside the same .app container so the artifact stays
-// the same shape. Just gives them centered, fixed-width framing.
-function AuthGateWrapper({ children }) {
-  return (
-    <div className="auth-gate">
-      <div className="auth-gate__frame">{children}</div>
-    </div>
-  );
-}
-
-function App() {
-  const [subs, setSubs] = useS(() => loadSubs() ?? SAMPLE_SUBS);
+function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
   const [scale, setScale] = useS(12);
   const [modal, setModal] = useS(null); // {kind:'add'|'edit'|'close', id?}
-  const [view, setView] = useS('app'); // 'app' | 'signin' | 'signup' | 'profile'
+  const [view, setView] = useS('app'); // 'app' | 'profile'
   const [tweaks, setTweak] = (window.useTweaks || (() => [{}, () => {}]))(/*EDITMODE-BEGIN*/{
     "theme": "light",
     "density": "normal",
@@ -38,21 +13,9 @@ function App() {
     "view": "app"
   }/*EDITMODE-END*/);
 
-  // Persist on every change (until Supabase is wired)
-  useE(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(subs)); } catch {}
-  }, [subs]);
-
   // Sync tweak-controlled view → state
   useE(() => { if (tweaks.view && tweaks.view !== view) setView(tweaks.view); }, [tweaks.view]);
   const goView = (v) => { setView(v); setTweak('view', v); };
-
-  // Real today, normalized to noon to avoid DST edge-cases when comparing dates
-  const today = useM(() => {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
-    return d;
-  }, []);
 
   const activeSubs = subs.filter(s => !s.closed);
 
@@ -82,27 +45,24 @@ function App() {
 
   const onSave = (data) => {
     if (data.id) {
-      setSubs(prev => prev.map(s => s.id === data.id ? {...s, ...data} : s));
+      const { id, ...patch } = data;
+      updateSub(id, patch);
     } else {
-      const id = 's' + Date.now();
-      setSubs(prev => [{...data, id}, ...prev]);
+      addSub(data);
     }
     closeModal();
   };
 
   const onClose = (id) => setModal({kind: 'close', id});
   const confirmClose = () => {
-    const id = modal.id;
-    setSubs(prev => prev.map(s => s.id === id ? {...s, closed: ymd(today)} : s));
+    updateSub(modal.id, { closed: ymd(today) });
     closeModal();
   };
 
-  const onResume = (id) => {
-    setSubs(prev => prev.map(s => s.id === id ? {...s, closed: null} : s));
-  };
+  const onResume = (id) => updateSub(id, { closed: null });
 
   const onDelete = (id) => {
-    setSubs(prev => prev.filter(s => s.id !== id));
+    deleteSub(id);
     if (modal?.id === id) closeModal();
   };
 
@@ -115,13 +75,7 @@ function App() {
     document.body.className = `${themeClass} ${densityClass}`;
   }, [themeClass, densityClass]);
 
-  // ── Auth views ───────────────────────────────────────────
-  if (view === 'signin') {
-    return <AuthGateWrapper><AuthSignIn onSignIn={() => goView('app')} onSignUp={() => goView('signup')} /></AuthGateWrapper>;
-  }
-  if (view === 'signup') {
-    return <AuthGateWrapper><AuthSignUp onSignUp={() => goView('app')} onSignIn={() => goView('signin')} /></AuthGateWrapper>;
-  }
+  const avatarChar = (user?.name || user?.email || 'U').slice(0, 1).toUpperCase();
 
   return (
     <div className="app">
@@ -139,9 +93,15 @@ function App() {
           <button
             className="topbar__avatar"
             onClick={() => goView('profile')}
-            title="Profile & settings"
+            title={user?.email || 'Profile & settings'}
             aria-label="Profile"
-          >A</button>
+            style={user?.avatarUrl ? {
+              backgroundImage: `url(${user.avatarUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              color: 'transparent',
+            } : undefined}
+          >{avatarChar}</button>
         </div>
       </div>
 
@@ -232,8 +192,10 @@ function App() {
       {view === 'profile' && (
         <div className="profile-overlay">
           <DesktopProfile
+            user={user}
+            stats={{ active: activeSubs.length, closed: subs.length - activeSubs.length }}
             onClose={() => goView('app')}
-            onSignOut={() => goView('signin')}
+            onSignOut={onSignOut}
           />
         </div>
       )}
@@ -274,10 +236,8 @@ function App() {
               value={view}
               onChange={(v) => goView(v)}
               options={[
-                {value:'app', label:'App (signed in)'},
+                {value:'app', label:'App'},
                 {value:'profile', label:'Profile & settings'},
-                {value:'signin', label:'Sign in'},
-                {value:'signup', label:'Sign up'},
               ]}
             />
           </window.TweakSection>
@@ -288,5 +248,3 @@ function App() {
 }
 
 window.App = App;
-window.SUBS_STORAGE_KEY = STORAGE_KEY;
-window.loadSubs = loadSubs;

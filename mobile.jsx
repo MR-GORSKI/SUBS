@@ -3,11 +3,11 @@
 
 const { useState: useSM, useMemo: useMM, useEffect: useEM, useRef: useRM } = React;
 
-function MobileApp({ subs, setSubs, today }) {
+function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
   const [scale, setScale] = useSM(6); // months
-  const [modal, setModal] = useSM(null); // {kind:'add'|'edit'|'close', id?}
+  const [modal, setModal] = useSM(null); // {kind:'add'|'edit'|'close'|'details', id?}
   const [tab, setTab] = useSM('timeline'); // 'timeline' | 'list'
-  const [view, setView] = useSM('app'); // 'app' | 'signin' | 'signup' | 'profile'
+  const [view, setView] = useSM('app'); // 'app' | 'profile'
 
   const activeSubs = subs.filter(s => !s.closed);
   const monthlyTotal = activeSubs.reduce((sum, s) => sum + toMonthly(s.price, s.period), 0);
@@ -27,29 +27,25 @@ function MobileApp({ subs, setSubs, today }) {
 
   const onSave = (data) => {
     if (data.id) {
-      setSubs(prev => prev.map(s => s.id === data.id ? {...s, ...data} : s));
+      const { id, ...patch } = data;
+      updateSub(id, patch);
     } else {
-      const id = 's' + Date.now();
-      setSubs(prev => [{...data, id}, ...prev]);
+      addSub(data);
     }
     setModal(null);
   };
   const confirmClose = () => {
-    const id = modal.id;
-    setSubs(prev => prev.map(s => s.id === id ? {...s, closed: ymd(today)} : s));
+    updateSub(modal.id, { closed: ymd(today) });
     setModal(null);
   };
-  const onResume = (id) => setSubs(prev => prev.map(s => s.id === id ? {...s, closed: null} : s));
+  const onResume = (id) => updateSub(id, { closed: null });
   const onDelete = (id) => {
-    setSubs(prev => prev.filter(s => s.id !== id));
+    deleteSub(id);
     if (modal?.id === id) setModal(null);
   };
 
   const editingSub = modal?.id ? subs.find(s => s.id === modal.id) : null;
-
-  // Auth views
-  if (view === 'signin') return <MobileAuth mode="signin" onSignIn={() => setView('app')} onSignUp={() => setView('signup')} />;
-  if (view === 'signup') return <MobileAuth mode="signup" onSignUp={() => setView('app')} onSignIn={() => setView('signin')} onBack={() => setView('signin')} />;
+  const avatarChar = (user?.name || user?.email || 'U').slice(0, 1).toUpperCase();
 
   return (
     <div className="m-app">
@@ -60,10 +56,17 @@ function MobileApp({ subs, setSubs, today }) {
           <button className="m-iconbtn" onClick={() => setModal({kind:'add'})}>+</button>
           <button
             className="m-iconbtn"
-            style={{background:'oklch(0.62 0.22 28)', color:'var(--paper)', fontSize:14}}
+            style={user?.avatarUrl ? {
+              backgroundImage: `url(${user.avatarUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              color: 'transparent',
+              fontSize: 14,
+            } : {background:'oklch(0.62 0.22 28)', color:'var(--paper)', fontSize:14}}
             onClick={() => setView('profile')}
             aria-label="Profile"
-          >A</button>
+            title={user?.email || 'Profile'}
+          >{avatarChar}</button>
         </div>
       </div>
 
@@ -177,8 +180,9 @@ function MobileApp({ subs, setSubs, today }) {
       {/* Profile sheet */}
       {view === 'profile' && (
         <MobileProfile
+          user={user}
           onClose={() => setView('app')}
-          onSignOut={() => setView('signin')}
+          onSignOut={onSignOut}
         />
       )}
     </div>

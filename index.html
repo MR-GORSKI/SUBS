@@ -15,6 +15,10 @@
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
+
+  <!-- Supabase client + repo -->
+  <script src="supabase.js"></script>
 
   <!-- Shared modules -->
   <script type="text/babel" src="tweaks-panel.jsx"></script>
@@ -28,25 +32,168 @@
   <script type="text/babel" src="mobile.jsx"></script>
 
   <script type="text/babel">
-    // Viewport-based shell picker.
-    // Mobile (≤768px) → MobileApp wrapped in shell that owns subs state + persistence.
-    // Desktop → App (manages its own state internally).
-    function MobileShell() {
-      const [subs, setSubs] = React.useState(() => loadSubs() ?? SAMPLE_SUBS);
-      React.useEffect(() => {
-        try { localStorage.setItem(SUBS_STORAGE_KEY, JSON.stringify(subs)); } catch {}
-      }, [subs]);
-      const today = React.useMemo(() => {
+    const { useState, useEffect, useMemo, useCallback } = React;
+
+    function Splash({ label = 'LOADING…' }) {
+      return (
+        <div style={{
+          minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 12, letterSpacing: '0.2em',
+          color: 'var(--ink-3, #888)', background: 'var(--bg, #fafaf7)',
+        }}>{label}</div>
+      );
+    }
+
+    function ErrorBox({ message, onRetry }) {
+      return (
+        <div style={{
+          minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 12,
+          alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'JetBrains Mono, monospace', padding: 24, textAlign: 'center',
+        }}>
+          <div style={{fontSize: 11, letterSpacing: '0.2em', color: 'oklch(0.62 0.22 28)'}}>SOMETHING BROKE</div>
+          <div style={{fontSize: 13, maxWidth: 480}}>{message}</div>
+          {onRetry && <button className="btn btn--sm btn--primary" onClick={onRetry}>RETRY</button>}
+        </div>
+      );
+    }
+
+    // Auth state
+    function useAuth() {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        let mounted = true;
+        sb.auth.getSession().then(({ data }) => {
+          if (!mounted) return;
+          setUser(userProfile(data.session?.user));
+          setLoading(false);
+        });
+        const { data: listener } = sb.auth.onAuthStateChange((_event, session) => {
+          if (!mounted) return;
+          setUser(userProfile(session?.user));
+        });
+        return () => { mounted = false; listener.subscription.unsubscribe(); };
+      }, []);
+
+      return { user, loading };
+    }
+
+    // Auth screen — picks desktop or mobile based on viewport
+    function AuthScreen({ isMobile }) {
+      const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+      const handle = async () => {
+        try { await signInWithGoogle(); }
+        catch (e) { alert('Sign-in failed: ' + e.message); }
+      };
+
+      if (isMobile) {
+        return (
+          <MobileAuth
+            mode={mode}
+            onSignIn={handle}
+            onSignUp={handle}
+            onBack={() => setMode('signin')}
+          />
+        );
+      }
+      return mode === 'signup'
+        ? <AuthSignUp onSignUp={handle} onSignIn={() => setMode('signin')} />
+        : <AuthSignIn onSignIn={handle} onSignUp={() => setMode('signup')} />;
+    }
+
+    // Data layer — owns subs state, talks to Supabase
+    function DataLayer({ user, onSignOut, isMobile }) {
+      const [subs, setSubs] = useState(null); // null while loading
+      const [error, setError] = useState(null);
+
+      const today = useMemo(() => {
         const d = new Date();
         d.setHours(12, 0, 0, 0);
         return d;
       }, []);
-      return <MobileApp subs={subs} setSubs={setSubs} today={today} />;
+
+      const reload = useCallback(() => {
+        setError(null);
+        setSubs(null);
+        subsRepo.list()
+          .then(setSubs)
+          .catch(err => { console.error(err); setError(err.message || String(err)); setSubs([]); });
+      }, []);
+
+      useEffect(() => { reload(); }, [user.id, reload]);
+
+      // Realtime sync (cross-device)
+      useEffect(() => {
+        const channel = sb
+          .channel('subs:' + user.id)
+          .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'subscriptions', filter: `user_id=eq.${user.id}` },
+            () => { reload(); })
+          .subscribe();
+        return () => { sb.removeChannel(channel); };
+      }, [user.id, reload]);
+
+      const addSub = useCallback(async (data) => {
+        try {
+          const created = await subsRepo.create(data);
+          setSubs(p => [created, ...(p || [])]);
+        } catch (e) { console.error(e); alert('Add failed: ' + e.message); }
+      }, []);
+
+      const updateSub = useCallback(async (id, patch) => {
+        setSubs(p => (p || []).map(s => s.id === id ? { ...s, ...patch } : s)); // optimistic
+        try { await subsRepo.update(id, patch); }
+        catch (e) { console.error(e); alert('Update failed: ' + e.message); reload(); }
+      }, [reload]);
+
+      const deleteSub = useCallback(async (id) => {
+        const before = subs;
+        setSubs(p => (p || []).filter(s => s.id !== id)); // optimistic
+        try { await subsRepo.remove(id); }
+        catch (e) { console.error(e); alert('Delete failed: ' + e.message); setSubs(before); }
+      }, [subs]);
+
+      if (error && (!subs || subs.length === 0)) {
+        return <ErrorBox message={"Couldn't load your subscriptions: " + error} onRetry={reload} />;
+      }
+      if (subs === null) return <Splash label="LOADING SUBSCRIPTIONS…" />;
+
+      const Shell = isMobile ? MobileApp : App;
+      return <Shell
+        subs={subs}
+        addSub={addSub}
+        updateSub={updateSub}
+        deleteSub={deleteSub}
+        today={today}
+        user={user}
+        onSignOut={onSignOut}
+      />;
     }
 
-    const isMobile = window.matchMedia('(max-width: 768px)').matches;
-    const Shell = isMobile ? MobileShell : App;
-    ReactDOM.createRoot(document.getElementById('root')).render(<Shell />);
+    // Root: auth gate
+    function Root() {
+      const { user, loading } = useAuth();
+      const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
+
+      useEffect(() => {
+        const mq = window.matchMedia('(max-width: 768px)');
+        const onChange = (e) => setIsMobile(e.matches);
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+      }, []);
+
+      const handleSignOut = useCallback(async () => {
+        try { await signOut(); } catch (e) { alert('Sign-out failed: ' + e.message); }
+      }, []);
+
+      if (loading) return <Splash label="STARTING UP…" />;
+      if (!user) return <AuthScreen isMobile={isMobile} />;
+      return <DataLayer user={user} onSignOut={handleSignOut} isMobile={isMobile} />;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
   </script>
 </body>
 </html>
