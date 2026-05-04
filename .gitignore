@@ -1,0 +1,28 @@
+# Design artifacts (not part of the deployed app)
+screenshots/
+design-canvas.jsx
+ios-frame.jsx
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors / agents
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+
+# Node (if a build pipeline is added later)
+node_modules/
+dist/
+build/
+.cache/
+
+# Local env / secrets
+.env
+.env.local
+.env.*.local
+*.local
