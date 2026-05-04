@@ -18,7 +18,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 64px 16px 12px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
   border-bottom: 2px solid var(--ink);
   position: sticky;
   top: 0;
