@@ -195,6 +195,12 @@ function MobileTimeline({ subs, today, scale, onScaleChange, onTap }) {
 
   return (
     <div className="m-timeline">
+      <div className="m-scale-toggle">
+        {[3, 6, 12].map(v => (
+          <button key={v} className={scale === v ? 'is-active' : ''} onClick={() => onScaleChange(v)}>{v}M</button>
+        ))}
+      </div>
+
       <div className="m-timeline__head">
         <div className="m-timeline__sublabel">SUB</div>
         <div className="m-timeline__chartlabel">
@@ -202,17 +208,11 @@ function MobileTimeline({ subs, today, scale, onScaleChange, onTap }) {
             const isCurrent = m.getFullYear() === today.getFullYear() && m.getMonth() === today.getMonth();
             return (
               <div key={i} className={`m-month-tick ${isCurrent ? 'is-current' : ''}`}>
-                {MONTH_NAMES[m.getMonth()][0]}
+                {MONTH_NAMES[m.getMonth()]}
               </div>
             );
           })}
         </div>
-      </div>
-
-      <div className="m-scale-toggle">
-        {[3, 6, 12].map(v => (
-          <button key={v} className={scale === v ? 'is-active' : ''} onClick={() => onScaleChange(v)}>{v}M</button>
-        ))}
       </div>
 
       <div className="m-timeline__body">

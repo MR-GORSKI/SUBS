@@ -148,11 +148,14 @@
 }
 .m-month-tick {
   flex: 1;
+  min-width: 0;
   text-align: center;
   font-weight: 700;
-  font-size: 9px;
+  font-size: 8px;
+  letter-spacing: 0.02em;
   border-right: 1px solid var(--grid);
   padding: 1px 0;
+  overflow: hidden;
 }
 .m-month-tick:last-child { border-right: none; }
 .m-month-tick.is-current {
@@ -161,7 +164,7 @@
 }
 .m-scale-toggle {
   display: flex;
-  margin: 8px 16px 12px;
+  margin: 0 16px 10px;
   border: 2px solid var(--ink);
   background: var(--paper);
 }
