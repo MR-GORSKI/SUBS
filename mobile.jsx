@@ -157,6 +157,7 @@ function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut,
             onEdit={() => setModal({kind:'edit', id: editingSub.id})}
             onClose={() => setModal({kind:'close', id: editingSub.id})}
             onResume={() => { onResume(editingSub.id); setModal(null); }}
+            onDelete={() => { onDelete(editingSub.id); setModal(null); }}
           />
         </MobileSheet>
       )}
@@ -176,13 +177,13 @@ function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut,
         const sub = subs.find(s => s.id === modal.id);
         if (!sub) return null;
         return (
-          <MobileSheet title={tr('CLOSE?')} onClose={() => setModal(null)}>
+          <MobileSheet title={tr('STOP?')} onClose={() => setModal(null)}>
             <div style={{padding: '8px 0 16px', fontSize: 13, lineHeight: 1.5}}>
-              Stop tracking <strong>{sub.name}</strong>? Timeline keeps the bar up to today with a CLOSED marker.
+              Stop tracking <strong>{sub.name}</strong>? Timeline keeps the bar up to today with a STOPPED marker. You can resume any time.
             </div>
             <div style={{display:'flex', gap: 10}}>
               <button className="m-btn m-btn--ghost" style={{flex:1}} onClick={() => setModal(null)}>{tr('CANCEL')}</button>
-              <button className="m-btn m-btn--primary" style={{flex:1}} onClick={confirmClose}>{tr('CLOSE IT')}</button>
+              <button className="m-btn m-btn--primary" style={{flex:1}} onClick={confirmClose}>{tr('STOP IT')}</button>
             </div>
           </MobileSheet>
         );
@@ -368,13 +369,13 @@ function MobileCard({ sub, today, onEdit, onClose, onResume }) {
 
       {sub.closed && (
         <div className="m-card__closed">
-          CLOSED · {fmtDate(closedAt)} · {fmtMoney(spent, sub.currency || 'EUR')} spent
+          STOPPED · {fmtDate(closedAt)} · {fmtMoney(spent, sub.currency || 'EUR')} spent
         </div>
       )}
 
       <div className="m-card__actions">
         {!sub.closed ? (
-          <button className="m-btn m-btn--sm m-btn--ghost" onClick={onClose}>CLOSE</button>
+          <button className="m-btn m-btn--sm m-btn--ghost" onClick={onClose}>STOP</button>
         ) : (
           <button className="m-btn m-btn--sm m-btn--ghost" onClick={onResume}>RESUME</button>
         )}
@@ -469,7 +470,7 @@ function MobileSubForm({ sub, onSave, onCancel, onDelete, defaultCurrency = 'EUR
 }
 
 // ── Details sheet (tap-to-view + edit) ─────────────
-function MobileDetails({ sub, today, onEdit, onClose, onResume }) {
+function MobileDetails({ sub, today, onEdit, onClose, onResume, onDelete, tr = (k) => k }) {
   const start = parseISO(sub.start);
   const closedAt = sub.closed ? parseISO(sub.closed) : null;
   const next = nextChargeAfter(sub, today);
@@ -498,7 +499,7 @@ function MobileDetails({ sub, today, onEdit, onClose, onResume }) {
             {fmtMoney(sub.price, sub.currency || 'EUR')}<span className="m-details__per">/{sub.period === 'month' ? 'mo' : sub.period === 'year' ? 'yr' : 'wk'}</span>
           </div>
         </div>
-        {sub.closed && <span className="m-details__pill">CLOSED</span>}
+        {sub.closed && <span className="m-details__pill">STOPPED</span>}
       </div>
 
       {!sub.closed && next && (
@@ -556,12 +557,22 @@ function MobileDetails({ sub, today, onEdit, onClose, onResume }) {
 
       <div className="m-details__actions">
         {!sub.closed ? (
-          <button className="m-btn m-btn--ghost" style={{flex:1}} onClick={onClose}>CLOSE</button>
+          <button className="m-btn m-btn--ghost" style={{flex:1}} onClick={onClose}>{tr('STOP')}</button>
         ) : (
-          <button className="m-btn m-btn--ghost" style={{flex:1}} onClick={onResume}>RESUME</button>
+          <button className="m-btn m-btn--ghost" style={{flex:1}} onClick={onResume}>{tr('RESUME')}</button>
         )}
-        <button className="m-btn m-btn--primary" style={{flex:1}} onClick={onEdit}>EDIT</button>
+        <button className="m-btn m-btn--primary" style={{flex:1}} onClick={onEdit}>{tr('EDIT')}</button>
       </div>
+      {onDelete && (
+        <button
+          className="m-btn m-btn--danger m-btn--sm"
+          style={{ width: '100%', marginTop: 10 }}
+          onClick={() => {
+            const ok = window.confirm(`Delete "${sub.name}" permanently? This removes it from history and cancels any Calendar reminder.`);
+            if (ok) onDelete();
+          }}
+        >{tr('DELETE')}</button>
+      )}
     </div>
   );
 }

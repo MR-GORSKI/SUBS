@@ -411,6 +411,12 @@
   background: transparent;
 }
 .m-btn--sm { padding: 6px 10px; font-size: 10px; }
+.m-btn--danger {
+  background: var(--paper);
+  color: oklch(0.55 0.22 28);
+  border-color: oklch(0.55 0.22 28);
+}
+.m-btn--danger:active { background: oklch(0.92 0.06 28); }
 
 /* Bottom sheet */
 .m-sheet-bg {
