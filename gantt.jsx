@@ -164,7 +164,7 @@ function GanttRow({ sub, axis, today, onHover, onLeave, onClose, onResume, onDel
         <div className="row-label__main">
           <div className="row-label__name">{sub.name}</div>
           <div className="row-label__meta">
-            <span>{fmtMoney(sub.price)}/{sub.period === 'month' ? 'mo' : sub.period === 'year' ? 'yr' : 'wk'}</span>
+            <span>{fmtMoney(sub.price, sub.currency || 'EUR')}/{sub.period === 'month' ? 'mo' : sub.period === 'year' ? 'yr' : 'wk'}</span>
             <span>·</span>
             <span>{fmtDate(start)}</span>
           </div>
@@ -340,7 +340,7 @@ function Tooltip({ sub, x, y, today }) {
       </div>
       <div className="tooltip__row">
         <span className="tooltip__k">Price</span>
-        <span className="tooltip__v">{fmtMoney(sub.price)} / {sub.period}</span>
+        <span className="tooltip__v">{fmtMoney(sub.price, sub.currency || 'EUR')} / {sub.period}</span>
       </div>
       <div className="tooltip__row">
         <span className="tooltip__k">Started</span>
@@ -359,15 +359,15 @@ function Tooltip({ sub, x, y, today }) {
       )}
       <div className="tooltip__row">
         <span className="tooltip__k">Monthly equiv</span>
-        <span className="tooltip__v">{fmtMoney(monthly)}</span>
+        <span className="tooltip__v">{fmtMoney(monthly, sub.currency || 'EUR')}</span>
       </div>
       <div className="tooltip__row">
         <span className="tooltip__k">Yearly equiv</span>
-        <span className="tooltip__v">{fmtMoney(yearly)}</span>
+        <span className="tooltip__v">{fmtMoney(yearly, sub.currency || 'EUR')}</span>
       </div>
       <div className="tooltip__row">
         <span className="tooltip__k">Charges so far</span>
-        <span className="tooltip__v">{charges} · {fmtMoney(spent)}</span>
+        <span className="tooltip__v">{charges} · {fmtMoney(spent, sub.currency || 'EUR')}</span>
       </div>
     </div>
   );

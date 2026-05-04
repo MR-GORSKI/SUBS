@@ -2,10 +2,11 @@
 
 const { useState: useStateM, useEffect: useEffectM } = React;
 
-function SubModal({ sub, onSave, onClose, onDelete }) {
+function SubModal({ sub, onSave, onClose, onDelete, defaultCurrency = 'EUR' }) {
   const isEdit = !!sub;
   const [name, setName] = useStateM(sub?.name || '');
   const [price, setPrice] = useStateM(sub?.price ?? '');
+  const [currency, setCurrency] = useStateM(sub?.currency || defaultCurrency);
   const [period, setPeriod] = useStateM(sub?.period || 'month');
   const [start, setStart] = useStateM(sub?.start || ymd(new Date()));
   const [color, setColor] = useStateM(sub?.color || ACCENTS[Math.floor(Math.random() * ACCENTS.length)]);
@@ -19,6 +20,7 @@ function SubModal({ sub, onSave, onClose, onDelete }) {
       id: sub?.id,
       name: name.trim(),
       price: Number(price),
+      currency,
       period,
       start,
       color,
@@ -46,8 +48,8 @@ function SubModal({ sub, onSave, onClose, onDelete }) {
           </div>
 
           <div className="field__row">
-            <div className="field">
-              <label className="field__label">Price (€)</label>
+            <div className="field" style={{flex: '1 1 auto'}}>
+              <label className="field__label">Price ({currencySymbol(currency)})</label>
               <input
                 className="field__input"
                 type="number"
@@ -58,18 +60,32 @@ function SubModal({ sub, onSave, onClose, onDelete }) {
                 placeholder="0.00"
               />
             </div>
-            <div className="field">
-              <label className="field__label">Period</label>
-              <div className="period-toggle">
-                {['week','month','year'].map(p => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={period === p ? 'is-active' : ''}
-                    onClick={() => setPeriod(p)}
-                  >{p}</button>
+            <div className="field" style={{flex: '0 0 auto'}}>
+              <label className="field__label">Currency</label>
+              <select
+                className="field__input"
+                value={currency}
+                onChange={e => setCurrency(e.target.value)}
+                style={{minWidth: 90}}
+              >
+                {CURRENCIES.map(c => (
+                  <option key={c} value={c}>{c}</option>
                 ))}
-              </div>
+              </select>
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="field__label">Period</label>
+            <div className="period-toggle">
+              {['week','month','year'].map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  className={period === p ? 'is-active' : ''}
+                  onClick={() => setPeriod(p)}
+                >{p}</button>
+              ))}
             </div>
           </div>
 

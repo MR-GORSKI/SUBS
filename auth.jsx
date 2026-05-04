@@ -151,15 +151,13 @@ function MobileAuth({ mode = 'signin', onSignIn, onSignUp, onBack } = {}) {
 }
 
 // ── Mobile profile sheet ──────────────────────────────────
-// When `standalone` is true, renders a faux app underneath (used in design canvas).
-// When false (the default integrated case), only the overlay is rendered — host
-// shows the real app behind.
-function MobileProfile({ user, onClose, onSignOut, standalone = false } = {}) {
+function MobileProfile({ user, prefs, setPref, onClose, onSignOut, standalone = false } = {}) {
   const [notifications, setNotifications] = useState(true);
-  const [theme, setTheme] = useState('light');
   const [warnDays, setWarnDays] = useState(3);
-  const [currency, setCurrency] = useState('EUR');
-  const [lang, setLang] = useState('EN');
+
+  const currency = prefs?.displayCurrency || 'EUR';
+  const lang = prefs?.language || 'EN';
+  const t = (k) => i18n.t(k, lang);
 
   const name = user?.name || 'Guest';
   const email = user?.email || '—';
@@ -182,39 +180,31 @@ function MobileProfile({ user, onClose, onSignOut, standalone = false } = {}) {
         </div>
 
         <div className="m-profile__group">
-          <div className="m-profile__group-label">PREFERENCES</div>
+          <div className="m-profile__group-label">{t('PREFERENCES')}</div>
           <div className="m-profile__row">
-            <div className="m-profile__row-label">Default currency</div>
+            <div className="m-profile__row-label">{t('Default currency')}</div>
             <div className="m-seg">
-              {['EUR','USD','RUB'].map(c => (
-                <div key={c} className={`m-seg__opt ${currency===c?'m-seg__opt--on':''}`} onClick={() => setCurrency(c)}>{c}</div>
+              {CURRENCIES.map(c => (
+                <div key={c} className={`m-seg__opt ${currency===c?'m-seg__opt--on':''}`} onClick={() => setPref?.('displayCurrency', c)}>{c}</div>
               ))}
             </div>
           </div>
           <div className="m-profile__row">
-            <div className="m-profile__row-label">Language</div>
+            <div className="m-profile__row-label">{t('Language')}</div>
             <div className="m-seg">
-              {['EN','RU','DE'].map(c => (
-                <div key={c} className={`m-seg__opt ${lang===c?'m-seg__opt--on':''}`} onClick={() => setLang(c)}>{c}</div>
-              ))}
-            </div>
-          </div>
-          <div className="m-profile__row">
-            <div className="m-profile__row-label">Theme</div>
-            <div className="m-seg">
-              {['light','dark'].map(c => (
-                <div key={c} className={`m-seg__opt ${theme===c?'m-seg__opt--on':''}`} onClick={() => setTheme(c)}>{c.toUpperCase()}</div>
+              {i18n.LANGUAGES.map(c => (
+                <div key={c} className={`m-seg__opt ${lang===c?'m-seg__opt--on':''}`} onClick={() => setPref?.('language', c)}>{c}</div>
               ))}
             </div>
           </div>
         </div>
 
         <div className="m-profile__group">
-          <div className="m-profile__group-label">NOTIFICATIONS</div>
+          <div className="m-profile__group-label">{t('NOTIFICATIONS')}</div>
           <div className="m-profile__row">
             <div>
-              <div className="m-profile__row-label">Charge reminders</div>
-              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>Push when a sub is about to renew</div>
+              <div className="m-profile__row-label">{t('Charge reminders')}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{t('Push when a sub is about to renew')}</div>
             </div>
             <div className={`m-toggle ${notifications?'m-toggle--on':''}`} onClick={() => setNotifications(!notifications)}>
               <div className="m-toggle__dot" />
@@ -222,8 +212,8 @@ function MobileProfile({ user, onClose, onSignOut, standalone = false } = {}) {
           </div>
           <div className="m-profile__row">
             <div>
-              <div className="m-profile__row-label">Warn me</div>
-              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>Days before charge</div>
+              <div className="m-profile__row-label">{t('Warn me')}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{t('Days before charge')}</div>
             </div>
             <div className="m-step">
               <div className="m-step__btn" onClick={() => setWarnDays(Math.max(1, warnDays-1))}>−</div>
@@ -234,13 +224,13 @@ function MobileProfile({ user, onClose, onSignOut, standalone = false } = {}) {
         </div>
 
         <div className="m-profile__group">
-          <div className="m-profile__group-label">ACCOUNT</div>
+          <div className="m-profile__group-label">{t('ACCOUNT')}</div>
           <button className="m-profile__row" onClick={onSignOut}>
-            <div className="m-profile__row-label">Sign out</div>
+            <div className="m-profile__row-label">{t('Sign out')}</div>
             <div className="m-profile__row-value">→</div>
           </button>
           <button className="m-profile__row m-profile__row--danger">
-            <div className="m-profile__row-label">Delete account</div>
+            <div className="m-profile__row-label">{t('Delete account')}</div>
             <div className="m-profile__row-value">→</div>
           </button>
         </div>
@@ -271,12 +261,13 @@ function MobileProfile({ user, onClose, onSignOut, standalone = false } = {}) {
 }
 
 // ── Desktop profile panel ─────────────────────────────────
-function DesktopProfile({ user, stats, onClose, onSignOut } = {}) {
+function DesktopProfile({ user, stats, prefs, setPref, onClose, onSignOut } = {}) {
   const [notifications, setNotifications] = useState(true);
-  const [theme, setTheme] = useState('light');
   const [warnDays, setWarnDays] = useState(3);
-  const [currency, setCurrency] = useState('EUR');
-  const [lang, setLang] = useState('EN');
+
+  const currency = prefs?.displayCurrency || 'EUR';
+  const lang = prefs?.language || 'EN';
+  const t = (k) => i18n.t(k, lang);
 
   const name = user?.name || 'Guest';
   const email = user?.email || '—';
@@ -288,7 +279,7 @@ function DesktopProfile({ user, stats, onClose, onSignOut } = {}) {
   return (
     <div className="profile-panel">
       <div className="profile-panel__head">
-        <h1 className="profile-panel__title">Profile & Settings</h1>
+        <h1 className="profile-panel__title">{t('Profile & Settings')}</h1>
         <div style={{ display:'flex', alignItems:'center', gap:16 }}>
           <div className="profile-panel__crumb">SUBS / SETTINGS</div>
           {onClose && <button className="profile-panel__close" onClick={onClose} title="Back to app">×</button>}
@@ -303,56 +294,45 @@ function DesktopProfile({ user, stats, onClose, onSignOut } = {}) {
             <div className="profile-panel__user-email">{email}</div>
           </div>
           <div className="profile-panel__user-meta">
-            MEMBER SINCE · {memberSince}<br/>
-            {active} ACTIVE · {closed} CLOSED
+            {t('MEMBER SINCE')} · {memberSince}<br/>
+            {active} {t('ACTIVE')} · {closed} {t('CLOSED')}
           </div>
-          <button className="profile-panel__signout-btn" onClick={onSignOut}>SIGN OUT →</button>
+          <button className="profile-panel__signout-btn" onClick={onSignOut}>{t('SIGN OUT →')}</button>
         </div>
 
         <div className="profile-panel__sections">
           <div className="profile-panel__section">
-            <div className="profile-panel__section-head">PREFERENCES</div>
+            <div className="profile-panel__section-head">{t('PREFERENCES')}</div>
             <div className="profile-panel__row">
               <div>
-                <div className="profile-panel__row-label">Default currency</div>
-                <div className="profile-panel__row-help">Used for new subscriptions and totals</div>
+                <div className="profile-panel__row-label">{t('Default currency')}</div>
+                <div className="profile-panel__row-help">{t('Used for new subscriptions and totals')}</div>
               </div>
               <div className="m-seg">
-                {['EUR','USD','RUB','GBP'].map(c => (
-                  <div key={c} className={`m-seg__opt ${currency===c?'m-seg__opt--on':''}`} onClick={() => setCurrency(c)}>{c}</div>
+                {CURRENCIES.map(c => (
+                  <div key={c} className={`m-seg__opt ${currency===c?'m-seg__opt--on':''}`} onClick={() => setPref?.('displayCurrency', c)}>{c}</div>
                 ))}
               </div>
             </div>
             <div className="profile-panel__row">
               <div>
-                <div className="profile-panel__row-label">Language</div>
-                <div className="profile-panel__row-help">Interface language</div>
+                <div className="profile-panel__row-label">{t('Language')}</div>
+                <div className="profile-panel__row-help">{t('Interface language')}</div>
               </div>
               <div className="m-seg">
-                {['EN','RU','DE','FR'].map(c => (
-                  <div key={c} className={`m-seg__opt ${lang===c?'m-seg__opt--on':''}`} onClick={() => setLang(c)}>{c}</div>
-                ))}
-              </div>
-            </div>
-            <div className="profile-panel__row">
-              <div>
-                <div className="profile-panel__row-label">Theme</div>
-                <div className="profile-panel__row-help">Light or dark interface</div>
-              </div>
-              <div className="m-seg">
-                {['light','dark','auto'].map(c => (
-                  <div key={c} className={`m-seg__opt ${theme===c?'m-seg__opt--on':''}`} onClick={() => setTheme(c)}>{c.toUpperCase()}</div>
+                {i18n.LANGUAGES.map(c => (
+                  <div key={c} className={`m-seg__opt ${lang===c?'m-seg__opt--on':''}`} onClick={() => setPref?.('language', c)}>{c}</div>
                 ))}
               </div>
             </div>
           </div>
 
           <div className="profile-panel__section">
-            <div className="profile-panel__section-head">NOTIFICATIONS</div>
+            <div className="profile-panel__section-head">{t('NOTIFICATIONS')}</div>
             <div className="profile-panel__row">
               <div>
-                <div className="profile-panel__row-label">Charge reminders</div>
-                <div className="profile-panel__row-help">Get notified before a subscription renews</div>
+                <div className="profile-panel__row-label">{t('Charge reminders')}</div>
+                <div className="profile-panel__row-help">{t('Get notified before a subscription renews')}</div>
               </div>
               <div className={`m-toggle ${notifications?'m-toggle--on':''}`} onClick={() => setNotifications(!notifications)}>
                 <div className="m-toggle__dot" />
@@ -360,8 +340,8 @@ function DesktopProfile({ user, stats, onClose, onSignOut } = {}) {
             </div>
             <div className="profile-panel__row">
               <div>
-                <div className="profile-panel__row-label">Warn me before charge</div>
-                <div className="profile-panel__row-help">Days in advance for renewal alerts</div>
+                <div className="profile-panel__row-label">{t('Warn me before charge')}</div>
+                <div className="profile-panel__row-help">{t('Days in advance for renewal alerts')}</div>
               </div>
               <div className="m-step">
                 <div className="m-step__btn" onClick={() => setWarnDays(Math.max(1, warnDays-1))}>−</div>
@@ -372,13 +352,13 @@ function DesktopProfile({ user, stats, onClose, onSignOut } = {}) {
           </div>
 
           <div className="profile-panel__section">
-            <div className="profile-panel__section-head">DANGER ZONE</div>
+            <div className="profile-panel__section-head">{t('DANGER ZONE')}</div>
             <div className="profile-panel__row profile-panel__row--danger">
               <div>
-                <div className="profile-panel__row-label">Delete account</div>
-                <div className="profile-panel__row-help">Permanently remove your account and all subscription data. This cannot be undone.</div>
+                <div className="profile-panel__row-label">{t('Delete account')}</div>
+                <div className="profile-panel__row-help">{t('Permanently remove your account and all subscription data. This cannot be undone.')}</div>
               </div>
-              <button className="profile-panel__danger-btn">DELETE →</button>
+              <button className="profile-panel__danger-btn">{t('DELETE →')}</button>
             </div>
           </div>
         </div>

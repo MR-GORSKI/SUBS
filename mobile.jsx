@@ -3,20 +3,28 @@
 
 const { useState: useSM, useMemo: useMM, useEffect: useEM, useRef: useRM } = React;
 
-function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
+function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut, prefs, setPref, fxRates }) {
   const [scale, setScale] = useSM(6); // months
   const [modal, setModal] = useSM(null); // {kind:'add'|'edit'|'close'|'details', id?}
   const [tab, setTab] = useSM('timeline'); // 'timeline' | 'list'
   const [view, setView] = useSM('app'); // 'app' | 'profile'
 
+  const lang = prefs?.language || 'EN';
+  const tr = (k) => i18n.t(k, lang);
+  const displayCcy = prefs?.displayCurrency || 'EUR';
+  const conv = (amount, from) => fx.convert(amount, from, fxRates);
+
   const activeSubs = subs.filter(s => !s.closed);
-  const monthlyTotal = activeSubs.reduce((sum, s) => sum + toMonthly(s.price, s.period), 0);
-  const yearlyTotal  = activeSubs.reduce((sum, s) => sum + toYearly(s.price, s.period), 0);
+  const monthlyTotal = activeSubs.reduce((sum, s) =>
+    sum + conv(toMonthly(s.price, s.period), s.currency || 'EUR'), 0);
+  const yearlyTotal  = activeSubs.reduce((sum, s) =>
+    sum + conv(toYearly(s.price, s.period), s.currency || 'EUR'), 0);
   const upcoming = activeSubs
     .map(s => ({ sub: s, date: nextChargeAfter(s, today) }))
     .filter(x => x.date)
     .sort((a, b) => a.date - b.date)[0];
-  const lifetime = subs.reduce((sum, s) => sum + totalSpent(s, today), 0);
+  const lifetime = subs.reduce((sum, s) =>
+    sum + conv(totalSpent(s, today), s.currency || 'EUR'), 0);
 
   const sortedSubs = useMM(() => {
     return [...subs].sort((a, b) => {
@@ -73,20 +81,20 @@ function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut 
       {/* KPI carousel */}
       <div className="m-kpis">
         <div className="m-kpi">
-          <div className="m-kpi__label">PER MONTH</div>
-          <div className="m-kpi__num">{fmtMoney(monthlyTotal)}</div>
-          <div className="m-kpi__sub">{activeSubs.length} active</div>
+          <div className="m-kpi__label">{tr('PER MONTH')}</div>
+          <div className="m-kpi__num">{fmtMoney(monthlyTotal, displayCcy)}</div>
+          <div className="m-kpi__sub">{activeSubs.length} {tr('active')}</div>
         </div>
         <div className="m-kpi">
-          <div className="m-kpi__label">PER YEAR</div>
-          <div className="m-kpi__num">{fmtMoney(yearlyTotal)}</div>
-          <div className="m-kpi__sub">projected</div>
+          <div className="m-kpi__label">{tr('PER YEAR')}</div>
+          <div className="m-kpi__num">{fmtMoney(yearlyTotal, displayCcy)}</div>
+          <div className="m-kpi__sub">{tr('projected')}</div>
         </div>
         <div className="m-kpi">
-          <div className="m-kpi__label">NEXT</div>
+          <div className="m-kpi__label">{tr('NEXT')}</div>
           {upcoming ? (
             <>
-              <div className="m-kpi__num m-kpi__num--sm">{fmtMoney(upcoming.sub.price)}</div>
+              <div className="m-kpi__num m-kpi__num--sm">{fmtMoney(upcoming.sub.price, upcoming.sub.currency || 'EUR')}</div>
               <div className="m-kpi__sub">{upcoming.sub.name.split(' ')[0]} · in {diffDays(today, upcoming.date)}d</div>
             </>
           ) : (
@@ -97,16 +105,16 @@ function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut 
           )}
         </div>
         <div className="m-kpi">
-          <div className="m-kpi__label">LIFETIME</div>
-          <div className="m-kpi__num">{fmtMoney(lifetime)}</div>
-          <div className="m-kpi__sub">all time</div>
+          <div className="m-kpi__label">{tr('LIFETIME')}</div>
+          <div className="m-kpi__num">{fmtMoney(lifetime, displayCcy)}</div>
+          <div className="m-kpi__sub">{tr('all time')}</div>
         </div>
       </div>
 
       {/* Tab toggle */}
       <div className="m-tabs">
-        <button className={tab === 'timeline' ? 'is-active' : ''} onClick={() => setTab('timeline')}>TIMELINE</button>
-        <button className={tab === 'list' ? 'is-active' : ''} onClick={() => setTab('list')}>LIST</button>
+        <button className={tab === 'timeline' ? 'is-active' : ''} onClick={() => setTab('timeline')}>{tr('TIMELINE')}</button>
+        <button className={tab === 'list' ? 'is-active' : ''} onClick={() => setTab('list')}>{tr('LIST')}</button>
       </div>
 
       {/* Body */}
@@ -136,15 +144,16 @@ function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut 
 
       {/* Bottom sheets */}
       {modal?.kind === 'add' && (
-        <MobileSheet title="NEW SUBSCRIPTION" onClose={() => setModal(null)}>
-          <MobileSubForm onSave={onSave} onCancel={() => setModal(null)} />
+        <MobileSheet title={tr('NEW SUBSCRIPTION')} onClose={() => setModal(null)}>
+          <MobileSubForm onSave={onSave} onCancel={() => setModal(null)} defaultCurrency={displayCcy} tr={tr} />
         </MobileSheet>
       )}
       {modal?.kind === 'details' && editingSub && (
-        <MobileSheet title="DETAILS" onClose={() => setModal(null)}>
+        <MobileSheet title={tr('DETAILS')} onClose={() => setModal(null)}>
           <MobileDetails
             sub={editingSub}
             today={today}
+            tr={tr}
             onEdit={() => setModal({kind:'edit', id: editingSub.id})}
             onClose={() => setModal({kind:'close', id: editingSub.id})}
             onResume={() => { onResume(editingSub.id); setModal(null); }}
@@ -152,9 +161,11 @@ function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut 
         </MobileSheet>
       )}
       {modal?.kind === 'edit' && editingSub && (
-        <MobileSheet title="EDIT" onClose={() => setModal({kind:'details', id: editingSub.id})}>
+        <MobileSheet title={tr('EDIT')} onClose={() => setModal({kind:'details', id: editingSub.id})}>
           <MobileSubForm
             sub={editingSub}
+            defaultCurrency={displayCcy}
+            tr={tr}
             onSave={(data) => { onSave(data); }}
             onCancel={() => setModal({kind:'details', id: editingSub.id})}
             onDelete={() => onDelete(editingSub.id)}
@@ -165,13 +176,13 @@ function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut 
         const sub = subs.find(s => s.id === modal.id);
         if (!sub) return null;
         return (
-          <MobileSheet title="CLOSE?" onClose={() => setModal(null)}>
+          <MobileSheet title={tr('CLOSE?')} onClose={() => setModal(null)}>
             <div style={{padding: '8px 0 16px', fontSize: 13, lineHeight: 1.5}}>
               Stop tracking <strong>{sub.name}</strong>? Timeline keeps the bar up to today with a CLOSED marker.
             </div>
             <div style={{display:'flex', gap: 10}}>
-              <button className="m-btn m-btn--ghost" style={{flex:1}} onClick={() => setModal(null)}>CANCEL</button>
-              <button className="m-btn m-btn--primary" style={{flex:1}} onClick={confirmClose}>CLOSE IT</button>
+              <button className="m-btn m-btn--ghost" style={{flex:1}} onClick={() => setModal(null)}>{tr('CANCEL')}</button>
+              <button className="m-btn m-btn--primary" style={{flex:1}} onClick={confirmClose}>{tr('CLOSE IT')}</button>
             </div>
           </MobileSheet>
         );
@@ -181,6 +192,8 @@ function MobileApp({ subs, addSub, updateSub, deleteSub, today, user, onSignOut 
       {view === 'profile' && (
         <MobileProfile
           user={user}
+          prefs={prefs}
+          setPref={setPref}
           onClose={() => setView('app')}
           onSignOut={onSignOut}
         />
@@ -253,7 +266,7 @@ function MobileTimelineRow({ sub, axis, today, onTap }) {
       <div className="m-timeline__sub">
         <div className="m-timeline__swatch" style={{background: sub.color}}></div>
         <div className="m-timeline__name">{sub.name}</div>
-        <div className="m-timeline__price">{fmtMoney(sub.price)}</div>
+        <div className="m-timeline__price">{fmtMoney(sub.price, sub.currency || 'EUR')}</div>
       </div>
       <div className="m-timeline__chart">
         <div className="m-timeline__cols">
@@ -329,7 +342,7 @@ function MobileCard({ sub, today, onEdit, onClose, onResume }) {
         <div className="m-card__main">
           <div className="m-card__name">{sub.name}</div>
           <div className="m-card__meta">
-            {fmtMoney(sub.price)}/{sub.period === 'month' ? 'mo' : sub.period === 'year' ? 'yr' : 'wk'}
+            {fmtMoney(sub.price, sub.currency || 'EUR')}/{sub.period === 'month' ? 'mo' : sub.period === 'year' ? 'yr' : 'wk'}
             {' · since '}{fmtDate(start)}
           </div>
         </div>
@@ -355,7 +368,7 @@ function MobileCard({ sub, today, onEdit, onClose, onResume }) {
 
       {sub.closed && (
         <div className="m-card__closed">
-          CLOSED · {fmtDate(closedAt)} · {fmtMoney(spent)} spent
+          CLOSED · {fmtDate(closedAt)} · {fmtMoney(spent, sub.currency || 'EUR')} spent
         </div>
       )}
 
@@ -365,7 +378,7 @@ function MobileCard({ sub, today, onEdit, onClose, onResume }) {
         ) : (
           <button className="m-btn m-btn--sm m-btn--ghost" onClick={onResume}>RESUME</button>
         )}
-        <span className="m-card__lifetime">{fmtMoney(spent)} lifetime</span>
+        <span className="m-card__lifetime">{fmtMoney(spent, sub.currency || 'EUR')} lifetime</span>
       </div>
     </div>
   );
@@ -387,47 +400,54 @@ function MobileSheet({ title, children, onClose }) {
 }
 
 // ── Form (mobile-tuned) ────────────────────────────
-function MobileSubForm({ sub, onSave, onCancel, onDelete }) {
+function MobileSubForm({ sub, onSave, onCancel, onDelete, defaultCurrency = 'EUR', tr = (k) => k }) {
   const isEdit = !!sub;
   const [name, setName] = useSM(sub?.name || '');
   const [price, setPrice] = useSM(sub?.price ?? '');
+  const [currency, setCurrency] = useSM(sub?.currency || defaultCurrency);
   const [period, setPeriod] = useSM(sub?.period || 'month');
-  const [start, setStart] = useSM(sub?.start || ymd(new Date(2026, 4, 4)));
+  const [start, setStart] = useSM(sub?.start || ymd(new Date()));
   const [color, setColor] = useSM(sub?.color || ACCENTS[Math.floor(Math.random() * ACCENTS.length)]);
 
   const canSave = name.trim() && price !== '' && Number(price) >= 0 && start;
 
   const submit = () => {
     if (!canSave) return;
-    onSave({ id: sub?.id, name: name.trim(), price: Number(price), period, start, color, closed: sub?.closed || null });
+    onSave({ id: sub?.id, name: name.trim(), price: Number(price), currency, period, start, color, closed: sub?.closed || null });
   };
 
   return (
     <div style={{display:'flex', flexDirection:'column', gap: 14}}>
       <div className="m-field">
-        <label>NAME</label>
+        <label>{tr('Name').toUpperCase()}</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Netflix" autoFocus={!isEdit}/>
       </div>
-      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap: 10}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 90px', gap: 10}}>
         <div className="m-field">
-          <label>PRICE €</label>
+          <label>{tr('Price').toUpperCase()} {currencySymbol(currency)}</label>
           <input type="number" step="0.01" min="0" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00"/>
         </div>
         <div className="m-field">
-          <label>PERIOD</label>
-          <div className="m-period">
-            {['week','month','year'].map(p => (
-              <button key={p} className={period === p ? 'is-active' : ''} onClick={() => setPeriod(p)}>{p[0].toUpperCase()}</button>
-            ))}
-          </div>
+          <label>{tr('Currency').toUpperCase()}</label>
+          <select value={currency} onChange={e => setCurrency(e.target.value)}>
+            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
       </div>
       <div className="m-field">
-        <label>START DATE</label>
+        <label>{tr('Period').toUpperCase()}</label>
+        <div className="m-period">
+          {['week','month','year'].map(p => (
+            <button key={p} className={period === p ? 'is-active' : ''} onClick={() => setPeriod(p)}>{p[0].toUpperCase()}</button>
+          ))}
+        </div>
+      </div>
+      <div className="m-field">
+        <label>{tr('Start date').toUpperCase()}</label>
         <input type="date" value={start} onChange={e => setStart(e.target.value)}/>
       </div>
       <div className="m-field">
-        <label>COLOR</label>
+        <label>{tr('Bar color').toUpperCase()}</label>
         <div className="m-colorgrid">
           {ACCENTS.map(c => (
             <div key={c} className={`m-colorswatch ${color === c ? 'is-active' : ''}`} style={{background: c}} onClick={() => setColor(c)}></div>
@@ -437,11 +457,11 @@ function MobileSubForm({ sub, onSave, onCancel, onDelete }) {
 
       <div style={{display:'flex', gap: 10, marginTop: 6}}>
         {isEdit && onDelete && (
-          <button className="m-btn m-btn--sm m-btn--ghost" onClick={onDelete} style={{marginRight:'auto'}}>DEL</button>
+          <button className="m-btn m-btn--sm m-btn--ghost" onClick={onDelete} style={{marginRight:'auto'}}>{tr('DELETE').slice(0,3)}</button>
         )}
-        <button className="m-btn m-btn--ghost" onClick={onCancel} style={{flex: isEdit ? 0 : 1}}>CANCEL</button>
+        <button className="m-btn m-btn--ghost" onClick={onCancel} style={{flex: isEdit ? 0 : 1}}>{tr('CANCEL')}</button>
         <button className="m-btn m-btn--primary" onClick={submit} disabled={!canSave} style={{flex: 1, opacity: canSave ? 1 : 0.4}}>
-          {isEdit ? 'SAVE' : 'ADD'}
+          {isEdit ? tr('SAVE') : tr('ADD')}
         </button>
       </div>
     </div>
@@ -475,7 +495,7 @@ function MobileDetails({ sub, today, onEdit, onClose, onResume }) {
         <div style={{flex:1, minWidth:0}}>
           <div className="m-details__name">{sub.name}</div>
           <div className="m-details__price">
-            {fmtMoney(sub.price)}<span className="m-details__per">/{sub.period === 'month' ? 'mo' : sub.period === 'year' ? 'yr' : 'wk'}</span>
+            {fmtMoney(sub.price, sub.currency || 'EUR')}<span className="m-details__per">/{sub.period === 'month' ? 'mo' : sub.period === 'year' ? 'yr' : 'wk'}</span>
           </div>
         </div>
         {sub.closed && <span className="m-details__pill">CLOSED</span>}
@@ -518,11 +538,11 @@ function MobileDetails({ sub, today, onEdit, onClose, onResume }) {
         )}
         <div className="m-details__row">
           <span className="m-details__k">Monthly equiv</span>
-          <span className="m-details__v">{fmtMoney(monthly)}</span>
+          <span className="m-details__v">{fmtMoney(monthly, sub.currency || 'EUR')}</span>
         </div>
         <div className="m-details__row">
           <span className="m-details__k">Yearly equiv</span>
-          <span className="m-details__v">{fmtMoney(yearly)}</span>
+          <span className="m-details__v">{fmtMoney(yearly, sub.currency || 'EUR')}</span>
         </div>
         <div className="m-details__row">
           <span className="m-details__k">Charges so far</span>
@@ -530,7 +550,7 @@ function MobileDetails({ sub, today, onEdit, onClose, onResume }) {
         </div>
         <div className="m-details__row m-details__row--strong">
           <span className="m-details__k">Spent total</span>
-          <span className="m-details__v">{fmtMoney(spent)}</span>
+          <span className="m-details__v">{fmtMoney(spent, sub.currency || 'EUR')}</span>
         </div>
       </div>
 

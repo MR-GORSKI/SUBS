@@ -26,3 +26,6 @@ build/
 .env.local
 .env.*.local
 *.local
+client_secret*.json
+*.pem
+*.key

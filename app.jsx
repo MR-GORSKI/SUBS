@@ -2,7 +2,7 @@
 
 const { useState: useS, useMemo: useM, useEffect: useE } = React;
 
-function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
+function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut, prefs, setPref, fxRates }) {
   const [scale, setScale] = useS(12);
   const [modal, setModal] = useS(null); // {kind:'add'|'edit'|'close', id?}
   const [view, setView] = useS('app'); // 'app' | 'profile'
@@ -17,18 +17,26 @@ function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
   useE(() => { if (tweaks.view && tweaks.view !== view) setView(tweaks.view); }, [tweaks.view]);
   const goView = (v) => { setView(v); setTweak('view', v); };
 
+  const lang = prefs?.language || 'EN';
+  const tr = (k) => i18n.t(k, lang);
+  const displayCcy = prefs?.displayCurrency || 'EUR';
+  const conv = (amount, from) => fx.convert(amount, from, fxRates);
+
   const activeSubs = subs.filter(s => !s.closed);
 
-  // KPIs
-  const monthlyTotal = activeSubs.reduce((sum, s) => sum + toMonthly(s.price, s.period), 0);
-  const yearlyTotal  = activeSubs.reduce((sum, s) => sum + toYearly(s.price, s.period), 0);
+  // KPIs — convert each sub's amount from its own currency into displayCcy
+  const monthlyTotal = activeSubs.reduce((sum, s) =>
+    sum + conv(toMonthly(s.price, s.period), s.currency || 'EUR'), 0);
+  const yearlyTotal  = activeSubs.reduce((sum, s) =>
+    sum + conv(toYearly(s.price, s.period), s.currency || 'EUR'), 0);
 
   const upcoming = activeSubs
     .map(s => ({ sub: s, date: nextChargeAfter(s, today) }))
     .filter(x => x.date)
     .sort((a, b) => a.date - b.date)[0];
 
-  const lifetime = subs.reduce((sum, s) => sum + totalSpent(s, today), 0);
+  const lifetime = subs.reduce((sum, s) =>
+    sum + conv(totalSpent(s, today), s.currency || 'EUR'), 0);
 
   // Sort subs: active first, by start date desc; closed last
   const sortedSubs = useM(() => {
@@ -83,13 +91,10 @@ function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
       <div className="topbar">
         <div className="brand">
           <div className="brand__logo">SUBS<span style={{color:'oklch(0.62 0.22 28)'}}>×</span></div>
-          <div className="brand__sub">SUBSCRIPTION TRACKER · v0.1</div>
+          <div className="brand__sub">{tr('SUBSCRIPTION TRACKER · v0.1')}</div>
         </div>
         <div className="topbar__right">
-          <button className="btn btn--sm btn--ghost" onClick={() => setTweak('theme', tweaks.theme === 'dark' ? 'light' : 'dark')}>
-            {tweaks.theme === 'dark' ? '☀ LIGHT' : '☾ DARK'}
-          </button>
-          <button className="btn btn--sm btn--primary" onClick={openAdd}>+ NEW</button>
+          <button className="btn btn--sm btn--primary" onClick={openAdd}>{tr('+ NEW')}</button>
           <button
             className="topbar__avatar"
             onClick={() => goView('profile')}
@@ -109,20 +114,20 @@ function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
       {tweaks.showKpis !== false && (
         <div className="kpis">
           <div className="kpi">
-            <div className="kpi__label">PER MONTH <span className="kpi__tag">EUR</span></div>
-            <div className="kpi__num">{fmtMoney(monthlyTotal)}</div>
-            <div className="kpi__sub">{activeSubs.length} active subs</div>
+            <div className="kpi__label">{tr('PER MONTH')} <span className="kpi__tag">{displayCcy}</span></div>
+            <div className="kpi__num">{fmtMoney(monthlyTotal, displayCcy)}</div>
+            <div className="kpi__sub">{activeSubs.length} {tr('active subs')}</div>
           </div>
           <div className="kpi">
-            <div className="kpi__label">PER YEAR</div>
-            <div className="kpi__num">{fmtMoney(yearlyTotal)}</div>
-            <div className="kpi__sub">projected</div>
+            <div className="kpi__label">{tr('PER YEAR')}</div>
+            <div className="kpi__num">{fmtMoney(yearlyTotal, displayCcy)}</div>
+            <div className="kpi__sub">{tr('projected')}</div>
           </div>
           <div className="kpi">
-            <div className="kpi__label">NEXT CHARGE</div>
+            <div className="kpi__label">{tr('NEXT CHARGE')}</div>
             {upcoming ? (
               <>
-                <div className="kpi__num kpi__num--sm">{fmtMoney(upcoming.sub.price)}</div>
+                <div className="kpi__num kpi__num--sm">{fmtMoney(upcoming.sub.price, upcoming.sub.currency || 'EUR')}</div>
                 <div className="kpi__sub">
                   <span style={{color:'var(--ink)', fontWeight:700}}>{upcoming.sub.name}</span>
                   {' · '}
@@ -133,19 +138,19 @@ function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
             ) : (
               <>
                 <div className="kpi__num kpi__num--sm">—</div>
-                <div className="kpi__sub">no upcoming</div>
+                <div className="kpi__sub">{tr('no upcoming')}</div>
               </>
             )}
           </div>
           <div className="kpi">
-            <div className="kpi__label">ACTIVE</div>
+            <div className="kpi__label">{tr('ACTIVE')}</div>
             <div className="kpi__num">{activeSubs.length}<span style={{color:'var(--ink-3)', fontSize:'18px'}}>/{subs.length}</span></div>
-            <div className="kpi__sub">{subs.length - activeSubs.length} closed</div>
+            <div className="kpi__sub">{subs.length - activeSubs.length} {tr('closed')}</div>
           </div>
           <div className="kpi">
-            <div className="kpi__label">SPENT TOTAL</div>
-            <div className="kpi__num">{fmtMoney(lifetime)}</div>
-            <div className="kpi__sub">all time, all subs</div>
+            <div className="kpi__label">{tr('SPENT TOTAL')}</div>
+            <div className="kpi__num">{fmtMoney(lifetime, displayCcy)}</div>
+            <div className="kpi__sub">{tr('all time, all subs')}</div>
           </div>
         </div>
       )}
@@ -169,10 +174,10 @@ function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
 
       {/* MODALS */}
       {modal?.kind === 'add' && (
-        <SubModal onSave={onSave} onClose={closeModal} onDelete={onDelete} />
+        <SubModal onSave={onSave} onClose={closeModal} onDelete={onDelete} defaultCurrency={displayCcy} />
       )}
       {modal?.kind === 'edit' && editingSub && (
-        <SubModal sub={editingSub} onSave={onSave} onClose={closeModal} onDelete={onDelete} />
+        <SubModal sub={editingSub} onSave={onSave} onClose={closeModal} onDelete={onDelete} defaultCurrency={displayCcy} />
       )}
       {modal?.kind === 'close' && (() => {
         const sub = subs.find(s => s.id === modal.id);
@@ -194,6 +199,8 @@ function App({ subs, addSub, updateSub, deleteSub, today, user, onSignOut }) {
           <DesktopProfile
             user={user}
             stats={{ active: activeSubs.length, closed: subs.length - activeSubs.length }}
+            prefs={prefs}
+            setPref={setPref}
             onClose={() => goView('app')}
             onSignOut={onSignOut}
           />

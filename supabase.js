@@ -49,6 +49,7 @@ function rowToSub(r) {
     id: r.id,
     name: r.name,
     price: Number(r.price),
+    currency: r.currency || 'EUR',
     period: r.period,
     start: r.start,
     color: r.color,
@@ -73,6 +74,7 @@ const subsRepo = {
       user_id: user.id,
       name: sub.name,
       price: sub.price,
+      currency: sub.currency || 'EUR',
       period: sub.period,
       start: sub.start,
       color: sub.color,
@@ -89,12 +91,13 @@ const subsRepo = {
 
   async update(id, patch) {
     const row = {};
-    if ('name' in patch)   row.name = patch.name;
-    if ('price' in patch)  row.price = patch.price;
-    if ('period' in patch) row.period = patch.period;
-    if ('start' in patch)  row.start = patch.start;
-    if ('color' in patch)  row.color = patch.color;
-    if ('closed' in patch) row.closed = patch.closed;
+    if ('name' in patch)     row.name = patch.name;
+    if ('price' in patch)    row.price = patch.price;
+    if ('currency' in patch) row.currency = patch.currency;
+    if ('period' in patch)   row.period = patch.period;
+    if ('start' in patch)    row.start = patch.start;
+    if ('color' in patch)    row.color = patch.color;
+    if ('closed' in patch)   row.closed = patch.closed;
     const { data, error } = await sb
       .from('subscriptions')
       .update(row)

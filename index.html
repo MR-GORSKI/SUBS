@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Track every recurring charge. Visual gantt timeline of your subscriptions.">
   <!-- Cache-bust: bump ?v= on every deploy. Browsers see new URL → fresh fetch. -->
-  <link rel="stylesheet" href="styles.css?v=3">
-  <link rel="stylesheet" href="mobile.css?v=3">
-  <link rel="stylesheet" href="auth.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="mobile.css?v=4">
+  <link rel="stylesheet" href="auth.css?v=4">
 </head>
 <body>
   <div id="root"></div>
@@ -18,22 +18,26 @@
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Supabase client + repo -->
-  <script src="supabase.js?v=3"></script>
+  <!-- Plain JS modules (executed in order before Babel scripts) -->
+  <script src="supabase.js?v=4"></script>
+  <script src="fx.js?v=4"></script>
+  <script src="prefs.js?v=4"></script>
+  <script src="i18n.js?v=4"></script>
 
-  <!-- Shared modules -->
-  <script type="text/babel" src="tweaks-panel.jsx?v=3"></script>
-  <script type="text/babel" src="utils.jsx?v=3"></script>
-  <script type="text/babel" src="modals.jsx?v=3"></script>
-  <script type="text/babel" src="gantt.jsx?v=3"></script>
-  <script type="text/babel" src="auth.jsx?v=3"></script>
+  <!-- Shared Babel modules -->
+  <script type="text/babel" src="tweaks-panel.jsx?v=4"></script>
+  <script type="text/babel" src="utils.jsx?v=4"></script>
+  <script type="text/babel" src="modals.jsx?v=4"></script>
+  <script type="text/babel" src="gantt.jsx?v=4"></script>
+  <script type="text/babel" src="auth.jsx?v=4"></script>
 
   <!-- Both shells; picker chooses one based on viewport -->
-  <script type="text/babel" src="app.jsx?v=3"></script>
-  <script type="text/babel" src="mobile.jsx?v=3"></script>
+  <script type="text/babel" src="app.jsx?v=4"></script>
+  <script type="text/babel" src="mobile.jsx?v=4"></script>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useCallback } = React;
+    const prefsAPI = window.prefs; // aliased so it doesn't shadow local `prefs` state
 
     function Splash({ label = 'LOADING…' }) {
       return (
@@ -105,15 +109,25 @@
     }
 
     // Data layer — owns subs state, talks to Supabase
-    function DataLayer({ user, onSignOut, isMobile }) {
+    function DataLayer({ user, onSignOut, isMobile, prefs, setPref }) {
       const [subs, setSubs] = useState(null); // null while loading
       const [error, setError] = useState(null);
+      const [fxRates, setFxRates] = useState(null);
 
       const today = useMemo(() => {
         const d = new Date();
         d.setHours(12, 0, 0, 0);
         return d;
       }, []);
+
+      // Load FX rates whenever displayCurrency changes.
+      useEffect(() => {
+        let alive = true;
+        fx.ensure(prefs.displayCurrency).then(payload => {
+          if (alive) setFxRates(payload);
+        }).catch(err => console.warn('FX load failed:', err));
+        return () => { alive = false; };
+      }, [prefs.displayCurrency]);
 
       const reload = useCallback(() => {
         setError(null);
@@ -170,12 +184,16 @@
         today={today}
         user={user}
         onSignOut={onSignOut}
+        prefs={prefs}
+        setPref={setPref}
+        fxRates={fxRates}
       />;
     }
 
-    // Root: auth gate
+    // Root: auth gate + global prefs
     function Root() {
       const { user, loading } = useAuth();
+      const [prefs, setPref] = prefsAPI.usePrefs();
       const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
 
       useEffect(() => {
@@ -191,7 +209,7 @@
 
       if (loading) return <Splash label="STARTING UP…" />;
       if (!user) return <AuthScreen isMobile={isMobile} />;
-      return <DataLayer user={user} onSignOut={handleSignOut} isMobile={isMobile} />;
+      return <DataLayer user={user} onSignOut={handleSignOut} isMobile={isMobile} prefs={prefs} setPref={setPref} />;
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<Root />);

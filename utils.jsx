@@ -54,14 +54,39 @@ function monthsBetween(a, b) {
 
 const MONTH_NAMES = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-function fmtMoney(n, currency = '€') {
+function fmtMoney(n, currency = 'EUR') {
   const sign = n < 0 ? '-' : '';
   const abs = Math.abs(n);
   const fixed = abs.toFixed(abs % 1 === 0 ? 0 : 2);
   // thousand separator with thin space
   const parts = fixed.split('.');
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f');
-  return `${sign}${currency}${parts.join('.')}`;
+  const num = parts.join('.');
+
+  // Legacy path: literal symbol like '\u20ac' passed in (back-compat).
+  if (currency && !CURRENCY_SYMBOLS[currency]) {
+    return `${sign}${currency}${num}`;
+  }
+
+  const sym = currencySymbol(currency);
+  if (CURRENCY_POSITION[currency] === 'after') {
+    return `${sign}${num} ${sym}`;
+  }
+  return `${sign}${sym}${num}`;
+}
+
+const CURRENCIES = ['EUR','USD','PLN','RUB','GBP','CHF','JPY'];
+
+const CURRENCY_SYMBOLS = {
+  EUR: '\u20ac', USD: '$', PLN: 'z\u0142', RUB: '\u20bd',
+  GBP: '\u00a3', CHF: 'Fr', JPY: '\u00a5',
+};
+
+// Some symbols read better after the number.
+const CURRENCY_POSITION = { PLN: 'after', CHF: 'after' };
+
+function currencySymbol(code) {
+  return CURRENCY_SYMBOLS[code] || code || '\u20ac';
 }
 
 function fmtDate(d) {
@@ -209,6 +234,7 @@ Object.assign(window, {
   pad2, ymd, parseISO,
   startOfMonth, addMonths, addDays, diffDays, monthsBetween,
   MONTH_NAMES,
+  CURRENCIES, CURRENCY_SYMBOLS, currencySymbol,
   fmtMoney, fmtDate, fmtDateShort,
   toMonthly, toYearly,
   chargeDates, totalSpent, nextChargeAfter,
