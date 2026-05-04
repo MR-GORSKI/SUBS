@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Track every recurring charge. Visual gantt timeline of your subscriptions.">
   <!-- Cache-bust: bump ?v= on every deploy. Browsers see new URL → fresh fetch. -->
-  <link rel="stylesheet" href="styles.css?v=5">
-  <link rel="stylesheet" href="mobile.css?v=5">
-  <link rel="stylesheet" href="auth.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="mobile.css?v=6">
+  <link rel="stylesheet" href="auth.css?v=6">
 </head>
 <body>
   <div id="root"></div>
@@ -19,22 +19,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Plain JS modules (executed in order before Babel scripts) -->
-  <script src="supabase.js?v=5"></script>
-  <script src="fx.js?v=5"></script>
-  <script src="prefs.js?v=5"></script>
-  <script src="i18n.js?v=5"></script>
-  <script src="gcal.js?v=5"></script>
+  <script src="supabase.js?v=6"></script>
+  <script src="fx.js?v=6"></script>
+  <script src="prefs.js?v=6"></script>
+  <script src="i18n.js?v=6"></script>
+  <script src="gcal.js?v=6"></script>
 
   <!-- Shared Babel modules -->
-  <script type="text/babel" src="tweaks-panel.jsx?v=5"></script>
-  <script type="text/babel" src="utils.jsx?v=5"></script>
-  <script type="text/babel" src="modals.jsx?v=5"></script>
-  <script type="text/babel" src="gantt.jsx?v=5"></script>
-  <script type="text/babel" src="auth.jsx?v=5"></script>
+  <script type="text/babel" src="tweaks-panel.jsx?v=6"></script>
+  <script type="text/babel" src="utils.jsx?v=6"></script>
+  <script type="text/babel" src="modals.jsx?v=6"></script>
+  <script type="text/babel" src="gantt.jsx?v=6"></script>
+  <script type="text/babel" src="auth.jsx?v=6"></script>
 
   <!-- Both shells; picker chooses one based on viewport -->
-  <script type="text/babel" src="app.jsx?v=5"></script>
-  <script type="text/babel" src="mobile.jsx?v=5"></script>
+  <script type="text/babel" src="app.jsx?v=6"></script>
+  <script type="text/babel" src="mobile.jsx?v=6"></script>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useCallback } = React;
@@ -153,23 +153,37 @@
 
       // ── Google Calendar sync ───────────────────────────
       // Best-effort: errors are logged but never block the local data path.
-      // CALENDAR_SCOPE_MISSING means user signed in before we requested the
-      // scope — they need to sign out + sign in again. We surface that once.
-      const calendarHandlerRef = React.useRef({ scopeWarned: false });
+      // After a CALENDAR_SCOPE_MISSING / CALENDAR_AUTH_REQUIRED we set
+      // `blocked` so subsequent sync attempts no-op until the user re-auths.
+      const calendarHandlerRef = React.useRef({ blocked: false, warned: false });
 
       const handleCalendarError = useCallback((e) => {
-        if (e.message === 'CALENDAR_SCOPE_MISSING' && !calendarHandlerRef.current.scopeWarned) {
-          calendarHandlerRef.current.scopeWarned = true;
-          alert('Google Calendar access not granted. Sign out and sign in again to enable calendar reminders.');
+        if (e.message === 'CALENDAR_SCOPE_MISSING') {
+          calendarHandlerRef.current.blocked = true;
+          if (!calendarHandlerRef.current.warned) {
+            calendarHandlerRef.current.warned = true;
+            alert('Google Calendar access not granted. Sign out and sign in again — Google will ask for calendar permission this time.');
+          }
           return;
         }
-        if (e.message === 'CALENDAR_AUTH_REQUIRED' && !calendarHandlerRef.current.scopeWarned) {
-          calendarHandlerRef.current.scopeWarned = true;
-          alert('Google session expired. Sign out and sign in again to refresh calendar access.');
+        if (e.message === 'CALENDAR_AUTH_REQUIRED') {
+          calendarHandlerRef.current.blocked = true;
+          if (!calendarHandlerRef.current.warned) {
+            calendarHandlerRef.current.warned = true;
+            alert('Google session expired. Sign out and sign in again to refresh calendar access.');
+          }
           return;
         }
         console.warn('Calendar sync:', e);
       }, []);
+
+      // Reset block flag when user toggles calendar on/off (so re-login + re-toggle works).
+      useEffect(() => {
+        calendarHandlerRef.current.blocked = false;
+        calendarHandlerRef.current.warned = false;
+      }, [prefs.googleCalendarEnabled]);
+
+      const isCalendarBlocked = () => calendarHandlerRef.current.blocked;
 
       // Lazily resolve the SUBS calendar id, caching in prefs.
       const resolveCalendarId = useCallback(async () => {
@@ -180,7 +194,7 @@
       }, [prefs.googleCalendarId, setPref]);
 
       const syncCreate = useCallback(async (sub) => {
-        if (!prefs.googleCalendarEnabled) return;
+        if (!prefs.googleCalendarEnabled || isCalendarBlocked()) return;
         try {
           const calendarId = await resolveCalendarId();
           const eventId = await gcal.createEvent(calendarId, sub, prefs.warnDays);
@@ -190,7 +204,7 @@
       }, [prefs.googleCalendarEnabled, prefs.warnDays, resolveCalendarId, handleCalendarError]);
 
       const syncUpdate = useCallback(async (sub) => {
-        if (!prefs.googleCalendarEnabled) return;
+        if (!prefs.googleCalendarEnabled || isCalendarBlocked()) return;
         try {
           if (sub.gcal_event_id && sub.gcal_calendar_id) {
             await gcal.updateEvent(sub.gcal_calendar_id, sub.gcal_event_id, sub, prefs.warnDays);
@@ -204,7 +218,7 @@
       }, [prefs.googleCalendarEnabled, prefs.warnDays, resolveCalendarId, handleCalendarError]);
 
       const syncDelete = useCallback(async (sub) => {
-        if (!sub.gcal_event_id || !sub.gcal_calendar_id) return;
+        if (!sub.gcal_event_id || !sub.gcal_calendar_id || isCalendarBlocked()) return;
         try { await gcal.deleteEvent(sub.gcal_calendar_id, sub.gcal_event_id); }
         catch (e) { handleCalendarError(e); }
       }, [handleCalendarError]);
@@ -245,7 +259,7 @@
       const bulkSyncRunningRef = React.useRef(false);
       useEffect(() => {
         if (!prefs.googleCalendarEnabled || !subs || subs.length === 0) return;
-        if (bulkSyncRunningRef.current) return;
+        if (bulkSyncRunningRef.current || isCalendarBlocked()) return;
 
         const pending = subs.filter(s => !s.closed && !s.gcal_event_id);
         if (pending.length === 0) return;
@@ -255,12 +269,14 @@
           try {
             const calendarId = await resolveCalendarId();
             for (const s of pending) {
+              if (isCalendarBlocked()) break;
               try {
                 const eventId = await gcal.createEvent(calendarId, s, prefs.warnDays);
                 await subsRepo.update(s.id, { gcal_event_id: eventId, gcal_calendar_id: calendarId });
               } catch (e) { handleCalendarError(e); break; }
             }
-          } finally { bulkSyncRunningRef.current = false; }
+          } catch (e) { handleCalendarError(e); }
+          finally { bulkSyncRunningRef.current = false; }
         })();
       }, [prefs.googleCalendarEnabled, prefs.warnDays, subs, resolveCalendarId, handleCalendarError]);
 

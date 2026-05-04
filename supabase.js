@@ -13,11 +13,14 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // ── Auth ─────────────────────────────────────────────────
-// Scopes requested at sign-in. `calendar.events` lets us create events on
-// the user's own calendars (not list other users' calendars).
+// Scopes requested at sign-in.
+// `calendar` (full) is needed because we both create a dedicated calendar
+// (calendars.insert) and list calendars to find it (calendarList.list).
+// The narrower `calendar.events` scope can't do either — only manipulate
+// events on calendars that already exist and were created by other means.
 // `access_type=offline` + `prompt=consent` ensures Google issues a refresh
 // token so Supabase can transparently refresh provider_token after 1h.
-const GOOGLE_SCOPES = 'email profile openid https://www.googleapis.com/auth/calendar.events';
+const GOOGLE_SCOPES = 'email profile openid https://www.googleapis.com/auth/calendar';
 
 async function signInWithGoogle() {
   // After Google flow, Supabase redirects back to current page; the JS client
