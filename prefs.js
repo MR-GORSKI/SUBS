@@ -1,9 +1,8 @@
-// prefs.js — user preferences, synced via Supabase auth.user.user_metadata.subs_prefs.
-// localStorage acts as a fast first-paint cache only. Source of truth is the server.
+// prefs.js — user preferences, persisted in Supabase `public.user_settings.prefs` (JSONB).
+// localStorage acts as a fast first-paint cache only. Source of truth is the table.
 //
-// On change: write goes to Supabase (user_metadata.subs_prefs is shallow-merged
-// alongside Google's profile fields). Other devices pick up the new values on
-// next sign-in / session refresh — i.e. eventually consistent, not realtime.
+// Why not auth.user_metadata? Supabase refreshes user_metadata from the OAuth
+// provider on every sign-in, wiping any custom keys. A dedicated table sidesteps that.
 
 (function () {
   const KEY = 'subs:prefs:v1';
@@ -28,13 +27,33 @@
     try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {}
   }
 
+  async function loadRemote() {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return null;
+      const { data, error } = await sb
+        .from('user_settings')
+        .select('prefs')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.prefs || null;
+    } catch (e) {
+      console.warn('prefs remote load failed:', e);
+      return null;
+    }
+  }
+
   async function saveRemote(prefs) {
     try {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return; // not signed in — local cache only
-      // Supabase shallow-merges `data` into user_metadata, so passing
-      // { subs_prefs: ... } leaves Google's profile fields (full_name, picture, etc.) intact.
-      const { error } = await sb.auth.updateUser({ data: { subs_prefs: prefs } });
+      const { error } = await sb
+        .from('user_settings')
+        .upsert(
+          { user_id: session.user.id, prefs, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        );
       if (error) throw error;
     } catch (e) {
       console.warn('prefs remote save failed:', e);
@@ -43,38 +62,39 @@
 
   // React hook
   function usePrefs() {
-    // Initial: defaults overlaid with last-known local cache (instant first paint).
     const [prefs, setPrefs] = React.useState(() => ({ ...DEFAULTS, ...(loadLocal() || {}) }));
 
-    // Latest-prefs ref so setPref can compute next value without depending on state.
     const prefsRef = React.useRef(prefs);
     React.useEffect(() => { prefsRef.current = prefs; }, [prefs]);
 
-    // Hydrate from the server whenever auth state changes (sign-in, refresh, user_updated).
+    // Hydrate from remote whenever auth becomes available.
     React.useEffect(() => {
       let mounted = true;
-      const applyFromSession = (session) => {
-        if (!mounted) return;
-        const remote = session?.user?.user_metadata?.subs_prefs;
-        if (!remote) return;
+      const hydrate = async () => {
+        const remote = await loadRemote();
+        if (!mounted || !remote) return;
         setPrefs(p => {
           const merged = { ...DEFAULTS, ...p, ...remote };
-          // Skip re-render if nothing actually changed
           for (const k of Object.keys(merged)) {
             if (merged[k] !== p[k]) return merged;
           }
           return p;
         });
       };
-      sb.auth.getSession().then(({ data }) => applyFromSession(data?.session));
-      const { data: listener } = sb.auth.onAuthStateChange((_e, session) => applyFromSession(session));
+      sb.auth.getSession().then(({ data }) => { if (data?.session) hydrate(); });
+      const { data: listener } = sb.auth.onAuthStateChange((event, session) => {
+        // Only re-hydrate when there's a real auth transition, not on every event.
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+          hydrate();
+        }
+      });
       return () => { mounted = false; listener.subscription.unsubscribe(); };
     }, []);
 
-    // Mirror to localStorage on every change (fast cache for next reload).
+    // Mirror to localStorage on every change (fast first-paint next reload).
     React.useEffect(() => { saveLocal(prefs); }, [prefs]);
 
-    // Cross-tab sync: another tab wrote to localStorage → pick it up.
+    // Cross-tab sync via storage events.
     React.useEffect(() => {
       const onStorage = (e) => {
         if (e.key !== KEY) return;
@@ -88,7 +108,7 @@
     const setPref = React.useCallback((k, v) => {
       const next = { ...prefsRef.current, [k]: v };
       setPrefs(next);
-      saveRemote(next); // fire-and-forget; failures only log
+      saveRemote(next); // fire-and-forget
     }, []);
 
     return [prefs, setPref];
